@@ -320,6 +320,22 @@
     leavesPartial(a.x0,a.y0,a.cx,a.cy,a.x1,a.y1,a.color,a.count,a.size,p);
   }
 
+  // a leafy stem topped with its own small flower, so the outer edges
+  // of the bouquet finish in a bloom instead of bare foliage
+  function drawLeafyBloom(a,p){
+    const stemT = clamp(p/0.72,0,1);
+    const cur = bezierPoint(stemT, a.x0,a.y0,a.cx,a.cy,a.tipX,a.tipY);
+    stemPartial(a.x0,a.y0,a.cx,a.cy,a.tipX,a.tipY,a.stemColor,a.stemWidth,stemT);
+    leavesPartial(a.x0,a.y0,a.cx,a.cy,a.tipX,a.tipY,a.leafColor,a.leafCount,a.leafSize,stemT);
+    const bloomP = clamp((p-0.5)/0.5,0,1);
+    if(bloomP<=0) return;
+    const dirLen = Math.hypot(cur.dx,cur.dy) || 1;
+    const ux = cur.dx/dirLen, uy = cur.dy/dirLen;
+    const outerLen = a.rings[a.rings.length-1].len;
+    const offset = outerLen * 0.55 * Math.max(easeOutBack(bloomP), 0.15);
+    radialFlowerBloom(cur.x + ux*offset, cur.y + uy*offset, a.rings, a.center, bloomP, a.round);
+  }
+
   function drawLavender(a,p){
     const stemT = clamp(p/0.5,0,1);
     stemPartial(a.x0,a.y0,a.cx,a.cy,a.tipX,a.tipY,a.stemColor,1.8,stemT);
@@ -483,10 +499,18 @@
     // back greenery
     {kind:'greenery', start:0.00, dur:0.9, a:{x0:160,y0:420,cx:100,cy:360,x1:68,y1:300,color:sageDark,width:3,count:5,size:16}},
     {kind:'greenery', start:0.05, dur:0.9, a:{x0:240,y0:420,cx:300,cy:355,x1:332,y1:290,color:sage,width:3,count:5,size:16}},
-    {kind:'greenery', start:0.10, dur:0.9, a:{x0:150,y0:415,cx:90,cy:320,x1:58,y1:228,color:sageDark,width:2.6,count:6,size:13}},
-    {kind:'greenery', start:0.15, dur:0.9, a:{x0:250,y0:415,cx:310,cy:315,x1:344,y1:220,color:sage,width:2.6,count:6,size:13}},
-    {kind:'greenery', start:0.20, dur:0.9, a:{x0:200,y0:410,cx:150,cy:290,x1:120,y1:178,color:sageDark,width:2.2,count:5,size:11}},
-    {kind:'greenery', start:0.25, dur:0.9, a:{x0:205,y0:410,cx:260,cy:285,x1:286,y1:175,color:sage,width:2.2,count:5,size:11}},
+    {kind:'leafybloom', start:0.10, dur:1.15, a:{x0:150,y0:415,cx:90,cy:320,tipX:58,tipY:228,stemColor:sageDark,stemWidth:2.6,leafColor:sageDark,leafCount:6,leafSize:13,round:true,
+      rings:[{count:6,len:10,wid:11,color:'#F7ECDD',rot:0.2,spread:1},{count:7,len:14,wid:13,color:'#FDF6EE',rot:0.65,spread:2}],
+      center:{r:4,color:'#E8C9A0',seeds:0}}},
+    {kind:'leafybloom', start:0.15, dur:1.15, a:{x0:250,y0:415,cx:310,cy:315,tipX:344,tipY:220,stemColor:sage,stemWidth:2.6,leafColor:sage,leafCount:6,leafSize:13,round:true,
+      rings:[{count:6,len:9,wid:10,color:'#9C6FA8',rot:0.4,spread:1},{count:7,len:13,wid:12,color:'#B79FD1',rot:0.85,spread:2}],
+      center:{r:3.5,color:'#F2E4C9',seeds:5,seedColor:'#7B5286'}}},
+    {kind:'leafybloom', start:0.20, dur:1.1, a:{x0:200,y0:410,cx:150,cy:290,tipX:120,tipY:178,stemColor:sageDark,stemWidth:2.2,leafColor:sageDark,leafCount:5,leafSize:11,round:true,
+      rings:[{count:6,len:9,wid:10,color:'#8E72AE',rot:0.3,spread:1},{count:7,len:13,wid:12,color:'#B79FD1',rot:0.8,spread:2}],
+      center:{r:3.5,color:'#F2E4C9',seeds:5,seedColor:'#7B5286'}}},
+    {kind:'leafybloom', start:0.25, dur:1.1, a:{x0:205,y0:410,cx:260,cy:285,tipX:286,tipY:175,stemColor:sage,stemWidth:2.2,leafColor:sage,leafCount:5,leafSize:11,round:true,
+      rings:[{count:6,len:8,wid:9,color:'#D9738D',rot:0.5,spread:1},{count:7,len:12,wid:11,color:'#F0A8BB',rot:0.1,spread:2}],
+      center:{r:3,color:'#F7E7C9',seeds:4,seedColor:'#B85570'}}},
 
     // sunflowers
     {kind:'bloom', start:0.50, dur:1.0, a:{x0:190,y0:415,cx:165,cy:270,tipX:155,tipY:140,stemColor:'#6E7F4A',stemWidth:3.4,
@@ -554,6 +578,7 @@
 
   function drawElement(kind,a,p){
     if(kind==='greenery') drawGreenery(a,p);
+    else if(kind==='leafybloom') drawLeafyBloom(a,p);
     else if(kind==='bloom') drawBloom(a,p);
     else if(kind==='lavender') drawLavender(a,p);
     else if(kind==='babysbreath') drawBabysBreath(a,p);
