@@ -205,6 +205,15 @@
     ctx.closePath();
   }
 
+  // fuller, rounder petal (rose/peony/lisianthus) instead of a sharp point
+  function roundPetal(len, wid){
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.bezierCurveTo(wid*0.62, -len*0.16, wid*0.5, -len*0.82, 0, -len);
+    ctx.bezierCurveTo(-wid*0.5, -len*0.82, -wid*0.62, -len*0.16, 0, 0);
+    ctx.closePath();
+  }
+
   function bezierPoint(t, x0,y0,cx,cy,x1,y1){
     const mt = 1-t;
     return {
@@ -235,13 +244,15 @@
       if(t < leafT) continue;
       const appear = easeOutBack(clamp((t-leafT)*5,0,1));
       const p = bezierPoint(leafT,x0,y0,cx,cy,x1,y1);
-      const angle = Math.atan2(p.dy,p.dx);
+      const tangent = Math.atan2(p.dy,p.dx);
       [1,-1].forEach(side=>{
         ctx.save();
         ctx.translate(p.x,p.y);
-        ctx.rotate(angle + side*1.15);
+        // tip points ~50 degrees off the stem's own direction, so the
+        // leaf splays to the side instead of hiding along the stem line
+        ctx.rotate(tangent + Math.PI/2 + side*0.85);
         ctx.scale(appear,appear);
-        petalPath(size, size*0.42);
+        petalPath(size, size*0.4);
         ctx.fillStyle = color;
         ctx.fill();
         ctx.restore();
@@ -249,7 +260,7 @@
     }
   }
 
-  function radialFlowerBloom(cx,cy,rings,center,bloom){
+  function radialFlowerBloom(cx,cy,rings,center,bloom,round){
     if(bloom<=0) return;
     const s = Math.max(easeOutBack(bloom),0);
     rings.forEach(ring=>{
@@ -261,7 +272,7 @@
         ctx.translate(ox,oy);
         ctx.rotate(ang + Math.PI/2);
         ctx.scale(s,s);
-        petalPath(ring.len, ring.wid);
+        if(round) roundPetal(ring.len, ring.wid); else petalPath(ring.len, ring.wid);
         ctx.fillStyle = ring.color;
         ctx.fill();
         ctx.restore();
@@ -288,12 +299,20 @@
     }
   }
 
-  // stem grows first, flower unfurls as it nears the top
+  // stem grows first, flower unfurls as it nears the top. The bloom rides
+  // the growing tip and is pushed forward along the stem's own direction,
+  // so the flower head sits perched above the stem rather than straddling it.
   function drawBloom(a,p){
     const stemT = clamp(p/0.75,0,1);
+    const cur = bezierPoint(stemT, a.x0,a.y0,a.cx,a.cy,a.tipX,a.tipY);
     stemPartial(a.x0,a.y0,a.cx,a.cy,a.tipX,a.tipY,a.stemColor,a.stemWidth,stemT);
     const bloomP = clamp((p-0.55)/0.45,0,1);
-    radialFlowerBloom(a.tipX,a.tipY,a.rings,a.center,bloomP);
+    if(bloomP<=0) return;
+    const dirLen = Math.hypot(cur.dx,cur.dy) || 1;
+    const ux = cur.dx/dirLen, uy = cur.dy/dirLen;
+    const outerLen = a.rings[a.rings.length-1].len;
+    const offset = outerLen * 0.55 * Math.max(easeOutBack(bloomP), 0.15);
+    radialFlowerBloom(cur.x + ux*offset, cur.y + uy*offset, a.rings, a.center, bloomP, a.round);
   }
 
   function drawGreenery(a,p){
@@ -312,8 +331,9 @@
       const t = 0.55 + i*0.045;
       const pt = bezierPoint(Math.min(t,0.98), a.x0,a.y0,a.cx,a.cy,a.tipX,a.tipY);
       const sz = (5-i*0.35)*scale;
+      const jitter = (frac(i*7.3 + a.tipX) - 0.5) * 1.4;
       ctx.beginPath();
-      ctx.ellipse(pt.x + (i%2?1.5:-1.5), pt.y, sz*0.6, sz, 0.4, 0, Math.PI*2);
+      ctx.ellipse(pt.x + jitter, pt.y, sz*0.55, sz, 0.25, 0, Math.PI*2);
       ctx.fillStyle = a.budColor;
       ctx.fill();
     }
@@ -481,27 +501,33 @@
     {kind:'lavender', start:0.85, dur:0.8, a:{x0:228,y0:418,cx:280,cy:305,tipX:310,tipY:205,stemColor:'#7C8F5E',budColor:'#8E72AE'}},
 
     // lisianthus
-    {kind:'bloom', start:1.00, dur:0.8, a:{x0:185,y0:420,cx:155,cy:320,tipX:140,tipY:230,stemColor:'#5E7A4C',stemWidth:2.4,
-      rings:[{count:6,len:20,wid:14,color:'#9C6FA8',rot:0.2,spread:2}], center:{r:6,color:'#F2E4C9',seeds:8,seedColor:'#7B5286'}}},
-    {kind:'bloom', start:1.05, dur:0.8, a:{x0:222,y0:420,cx:250,cy:320,tipX:268,tipY:235,stemColor:'#5E7A4C',stemWidth:2.4,
-      rings:[{count:6,len:18,wid:13,color:'#7B5286',rot:0.5,spread:2}], center:{r:5,color:'#F2E4C9',seeds:7,seedColor:'#7B5286'}}},
-    {kind:'bloom', start:1.10, dur:0.8, a:{x0:200,y0:415,cx:202,cy:300,tipX:205,tipY:190,stemColor:'#5E7A4C',stemWidth:2,
-      rings:[{count:6,len:17,wid:12,color:'#9C6FA8',rot:0.9,spread:2}], center:{r:5,color:'#F2E4C9',seeds:7,seedColor:'#7B5286'}}},
+    {kind:'bloom', start:1.00, dur:0.8, a:{x0:185,y0:420,cx:155,cy:320,tipX:140,tipY:230,stemColor:'#5E7A4C',stemWidth:2.4,round:true,
+      rings:[{count:8,len:19,wid:17,color:'#9C6FA8',rot:0.2,spread:1.5}], center:{r:6,color:'#F2E4C9',seeds:8,seedColor:'#7B5286'}}},
+    {kind:'bloom', start:1.05, dur:0.8, a:{x0:222,y0:420,cx:250,cy:320,tipX:268,tipY:235,stemColor:'#5E7A4C',stemWidth:2.4,round:true,
+      rings:[{count:8,len:17,wid:16,color:'#7B5286',rot:0.5,spread:1.5}], center:{r:5,color:'#F2E4C9',seeds:7,seedColor:'#7B5286'}}},
+    {kind:'bloom', start:1.10, dur:0.8, a:{x0:200,y0:415,cx:202,cy:300,tipX:205,tipY:190,stemColor:'#5E7A4C',stemWidth:2,round:true,
+      rings:[{count:8,len:16,wid:15,color:'#9C6FA8',rot:0.9,spread:1.5}], center:{r:5,color:'#F2E4C9',seeds:7,seedColor:'#7B5286'}}},
+    {kind:'bloom', start:1.20, dur:0.8, a:{x0:210,y0:412,cx:216,cy:335,tipX:222,tipY:265,stemColor:'#5E7A4C',stemWidth:2,round:true,
+      rings:[{count:8,len:15,wid:14,color:'#7B5286',rot:0.4,spread:1.5}], center:{r:5,color:'#F2E4C9',seeds:6,seedColor:'#7B5286'}}},
 
     // roses
-    {kind:'bloom', start:1.30, dur:0.9, a:{x0:178,y0:422,cx:160,cy:340,tipX:150,tipY:260,stemColor:'#5E7A4C',stemWidth:2.8,
-      rings:[{color:'#D9738D',count:6,len:9,wid:8,rot:0.2,spread:0},{color:'#E48CA0',count:7,len:15,wid:11,rot:0.7,spread:1},{color:'#F0A8BB',count:8,len:19,wid:13,rot:0.15,spread:2}]}},
-    {kind:'bloom', start:1.35, dur:0.9, a:{x0:220,y0:422,cx:245,cy:340,tipX:255,tipY:255,stemColor:'#5E7A4C',stemWidth:2.8,
-      rings:[{color:'#D9738D',count:6,len:10,wid:9,rot:0.4,spread:0},{color:'#E48CA0',count:7,len:16,wid:12,rot:0.9,spread:1},{color:'#F0A8BB',count:8,len:20,wid:14,rot:0.3,spread:2}]}},
-    {kind:'bloom', start:1.40, dur:0.9, a:{x0:200,y0:418,cx:200,cy:320,tipX:200,tipY:225,stemColor:'#5E7A4C',stemWidth:2.6,
-      rings:[{color:'#C9698A',count:6,len:9,wid:8,rot:0.6,spread:0},{color:'#D9738D',count:7,len:15,wid:11,rot:0.1,spread:1},{color:'#F0A8BB',count:8,len:19,wid:13,rot:0.5,spread:2}]}},
+    {kind:'bloom', start:1.30, dur:0.9, a:{x0:178,y0:422,cx:160,cy:340,tipX:150,tipY:260,stemColor:'#5E7A4C',stemWidth:2.8,round:true,
+      rings:[{color:'#C9698A',count:5,len:7,wid:8,rot:0.2,spread:0},{color:'#D9738D',count:8,len:12,wid:12,rot:0.65,spread:1},{color:'#E48CA0',count:10,len:16,wid:14,rot:0.3,spread:2},{color:'#F0A8BB',count:11,len:20,wid:16,rot:0.75,spread:3.5}]}},
+    {kind:'bloom', start:1.35, dur:0.9, a:{x0:220,y0:422,cx:245,cy:340,tipX:255,tipY:255,stemColor:'#5E7A4C',stemWidth:2.8,round:true,
+      rings:[{color:'#C9698A',count:5,len:8,wid:9,rot:0.4,spread:0},{color:'#D9738D',count:8,len:13,wid:13,rot:0.85,spread:1},{color:'#E48CA0',count:10,len:17,wid:15,rot:0.5,spread:2},{color:'#F0A8BB',count:11,len:21,wid:17,rot:0.95,spread:3.5}]}},
+    {kind:'bloom', start:1.40, dur:0.9, a:{x0:200,y0:418,cx:200,cy:320,tipX:200,tipY:225,stemColor:'#5E7A4C',stemWidth:2.6,round:true,
+      rings:[{color:'#C9698A',count:5,len:7,wid:8,rot:0.6,spread:0},{color:'#D9738D',count:8,len:12,wid:12,rot:0.1,spread:1},{color:'#E48CA0',count:10,len:16,wid:14,rot:0.7,spread:2},{color:'#F0A8BB',count:11,len:20,wid:16,rot:0.4,spread:3.5}]}},
+    {kind:'bloom', start:1.48, dur:0.85, a:{x0:168,y0:412,cx:152,cy:352,tipX:136,tipY:288,stemColor:'#5E7A4C',stemWidth:2.3,round:true,
+      rings:[{color:'#C9698A',count:5,len:6,wid:7,rot:0.3,spread:0},{color:'#D9738D',count:7,len:10,wid:10,rot:0.8,spread:1},{color:'#E48CA0',count:9,len:14,wid:12,rot:0.45,spread:1.5},{color:'#F0A8BB',count:10,len:17,wid:14,rot:0.9,spread:3}]}},
+    {kind:'bloom', start:1.52, dur:0.85, a:{x0:232,y0:412,cx:248,cy:352,tipX:266,tipY:284,stemColor:'#5E7A4C',stemWidth:2.3,round:true,
+      rings:[{color:'#C9698A',count:5,len:7,wid:7,rot:0.6,spread:0},{color:'#D9738D',count:7,len:11,wid:10,rot:0.15,spread:1},{color:'#E48CA0',count:9,len:15,wid:12,rot:0.75,spread:1.5},{color:'#F0A8BB',count:10,len:18,wid:14,rot:0.2,spread:3}]}},
 
     // peonies (focal, front)
-    {kind:'bloom', start:1.65, dur:1.0, a:{x0:190,y0:428,cx:178,cy:370,tipX:168,tipY:300,stemColor:'#5E7A4C',stemWidth:3.2,
-      rings:[{color:'#EFDCC7',count:8,len:12,wid:11,rot:0.2,spread:0},{color:'#F7ECDD',count:10,len:19,wid:15,rot:0.55,spread:2},{color:'#FDF6EE',count:11,len:25,wid:17,rot:0.1,spread:5}],
+    {kind:'bloom', start:1.65, dur:1.0, a:{x0:190,y0:428,cx:178,cy:370,tipX:168,tipY:300,stemColor:'#5E7A4C',stemWidth:3.2,round:true,
+      rings:[{color:'#EFDCC7',count:9,len:10,wid:11,rot:0.2,spread:0},{color:'#F2E2CB',count:11,len:16,wid:15,rot:0.5,spread:1.5},{color:'#F7ECDD',count:13,len:21,wid:18,rot:0.75,spread:3},{color:'#FDF6EE',count:14,len:26,wid:20,rot:0.1,spread:5.5}],
       center:{r:6,color:'#E8C9A0',seeds:0}}},
-    {kind:'bloom', start:1.70, dur:1.0, a:{x0:212,y0:428,cx:225,cy:370,tipX:238,tipY:300,stemColor:'#5E7A4C',stemWidth:3.2,
-      rings:[{color:'#EFDCC7',count:8,len:13,wid:12,rot:0.5,spread:0},{color:'#F7ECDD',count:10,len:20,wid:16,rot:0.15,spread:2},{color:'#FDF6EE',count:11,len:26,wid:18,rot:0.6,spread:5}],
+    {kind:'bloom', start:1.70, dur:1.0, a:{x0:212,y0:428,cx:225,cy:370,tipX:238,tipY:300,stemColor:'#5E7A4C',stemWidth:3.2,round:true,
+      rings:[{color:'#EFDCC7',count:9,len:11,wid:12,rot:0.5,spread:0},{color:'#F2E2CB',count:11,len:17,wid:16,rot:0.15,spread:1.5},{color:'#F7ECDD',count:13,len:22,wid:19,rot:0.85,spread:3},{color:'#FDF6EE',count:14,len:27,wid:21,rot:0.6,spread:5.5}],
       center:{r:6,color:'#E8C9A0',seeds:0}}},
 
     // baby's breath
@@ -510,6 +536,8 @@
     {kind:'babysbreath', start:2.20, dur:0.7, a:{tipX:175,tipY:130,spread:18,count:5,color:'#FBF7EE'}},
     {kind:'babysbreath', start:2.25, dur:0.7, a:{tipX:232,tipY:135,spread:18,count:5,color:'#FBF7EE'}},
     {kind:'babysbreath', start:2.30, dur:0.7, a:{tipX:200,tipY:150,spread:20,count:6,color:'#FBF7EE'}},
+    {kind:'babysbreath', start:2.35, dur:0.7, a:{tipX:140,tipY:180,spread:16,count:5,color:'#FBF7EE'}},
+    {kind:'babysbreath', start:2.40, dur:0.7, a:{tipX:262,tipY:185,spread:16,count:5,color:'#FBF7EE'}},
 
     // wrap + ribbon tie the bouquet together
     {kind:'wrap', start:2.70, dur:0.5, a:{}},
@@ -534,29 +562,52 @@
     else if(kind==='dew') drawDew(a,p);
   }
 
-  function renderAt(elapsed){
+  function renderAt(elapsed, sway){
     ctx.clearRect(0,0,W,H);
+    ctx.save();
+    if(sway){
+      ctx.translate(200,428);
+      ctx.rotate(sway);
+      ctx.translate(-200,-428);
+    }
     ELEMENTS.forEach(el=>{
       const p = clamp((elapsed - el.start)/el.dur, 0, 1);
       if(p<=0) return;
       drawElement(el.kind, el.a, p);
     });
+    ctx.restore();
   }
 
   let rafId = null;
   let animStart = null;
+  let idleStart = null;
   let finished = reduceMotion;
+
+  // a slow, barely-there sway once the bouquet has fully grown in,
+  // like it's resting near an open window
+  function idleFrame(ts){
+    if(idleStart===null) idleStart = ts;
+    const t = (ts-idleStart)/1000;
+    const sway = Math.sin(t*0.5) * (Math.PI/180) * 0.9;
+    renderAt(TOTAL_DURATION, sway);
+    rafId = requestAnimationFrame(idleFrame);
+  }
 
   function frame(ts){
     if(animStart===null) animStart = ts;
     const elapsed = (ts-animStart)/1000;
     if(elapsed >= TOTAL_DURATION){
-      renderAt(TOTAL_DURATION);
+      renderAt(TOTAL_DURATION, 0);
       finished = true;
-      rafId = null;
+      if(!reduceMotion){
+        idleStart = null;
+        rafId = requestAnimationFrame(idleFrame);
+      } else {
+        rafId = null;
+      }
       return;
     }
-    renderAt(elapsed);
+    renderAt(elapsed, 0);
     rafId = requestAnimationFrame(frame);
   }
 
@@ -565,9 +616,9 @@
     canvas.width = W * dpr;
     canvas.height = H * dpr;
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    if(finished){
-      renderAt(TOTAL_DURATION);
-    } else if(rafId===null && !reduceMotion){
+    if(finished && reduceMotion){
+      renderAt(TOTAL_DURATION, 0);
+    } else if(rafId===null && !finished){
       animStart = null;
       rafId = requestAnimationFrame(frame);
     }
